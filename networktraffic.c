@@ -24,6 +24,14 @@ typedef struct monitor {
 	unsigned int total_packet;
 	unsigned int old_packet;
 	unsigned int baud_width;
+	
+	struct sk_buff *sock_buff;                              /*struct packet over to*/
+	struct udphdr *udp_header;                             /* struct udp header over to*/
+	struct iphdr *ip_header;                                  /*struct ip header over to*/
+	struct tcphdr *tcp_header;                              /*struct tcp header over to*/
+	unsigned int sport, dport, saddr, daddr;            /* source/dest addresses/ports of ip header*/
+	char source_addr[16], dest_addr[16];               /*string rep. of source/dest addresses*/
+	int datalen;                                                    /* payload length*/
 }Monitor;
 
 Monitor Receiving = {};
@@ -36,10 +44,16 @@ static ssize_t read_proc (struct file *filp, char __user * buf, size_t count, lo
 	if(*offp > 0 || count < MAX_LEN)
 		return 0;
 	printk(KERN_INFO "Baud in proc: %d", Receiving.baud_width);
-	len += sprintf( info, "Receiving baud %d byte/s\n", Receiving.baud_width);
-	len += sprintf( info + len, "Total Received  %d byte\n", Receiving.total_packet);
-	len += sprintf( info + len, "Sending baud %d byte/s\n", Sending.baud_width);
+/*	len += sprintf( info, "Receiving baud %d byte/s\t", Receiving.baud_width);
+	len += sprintf( info + len, "Total Received  %d byte\t", Receiving.total_packet);
+	len += sprintf( info + len, "Sending baud %d byte/s\t", Sending.baud_width);
 	len += sprintf( info + len, "Total Sent  %d byte\n", Sending.total_packet);
+*/
+	len += sprintf( info, "%d ", Receiving.baud_width);
+	len += sprintf( info + len, "%d ", Receiving.total_packet);
+	len += sprintf( info + len, "%d ", Sending.baud_width);
+	len += sprintf( info + len, "%d\n", Sending.total_packet);
+	
 	if(copy_to_user(buf, info, len))
 		return -EFAULT;
 	*offp = len;
@@ -70,7 +84,8 @@ unsigned int hook_func_in(void *priv,
               struct sk_buff *skb,
               const struct nf_hook_state *state)
 {
-	struct iphdr *ip_header = (struct iphdr *)skb_network_header(skb);
+	Receiving.sock_buff = skb;
+	Receiving.ip_header = (struct iphdr *)skb_network_header(skb);
 	if(0 == skb){
         return NF_ACCEPT;
 	}
